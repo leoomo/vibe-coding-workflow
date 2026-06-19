@@ -1,6 +1,6 @@
 ---
 name: vibe-coding-workflow
-description: 当用户要"实现某功能 / 修某个 bug / vibe coding 一个任务"时使用。强制规格驱动管线：上下文工程 → 对抗式 Reviewer 子代理 → PRD → 实现文档 → 测试设计 → 分步实现+逐步提交 → 验收门禁。核心铁律：在被审查的书面计划获批准前，绝不写代码。
+description: 当用户要"实现某功能 / 修某个 bug / vibe coding 一个任务"时使用。强制规格驱动管线：上下文工程 → 对抗式 Reviewer 子代理 → PRD → 实现文档 → 测试设计 → 分步实现（TDD + 每步代码审核）+逐步提交 → 验收门禁。核心铁律：在被审查的书面计划获批准前，绝不写代码。
 ---
 
 # Vibe Coding Workflow
@@ -130,21 +130,33 @@ AI 写出来的东西看似逻辑完整，却常藏隐患：需求理解偏差�
 
 **前置：绿基线** —— 实现前先跑一次既有测试套件（按 `references/acceptance-checklist.md` §0）。全绿才记为基线、开始实现；有红则**停下报告**，不开始写代码（否则后续 verify/guard 结果都不可信）。
 
-生成 `todo.md`（每条任务带 **verify 命令** + 提交点），然后**一步一执行、自动提交**：
+生成 `todo.md`（每条任务带 **verify 命令** + 提交点），然后**一步一执行、自动提交**——每步用 TDD（测试先行）实现，并在提交后做一次 mini 代码审核：
 
 ```
 对 todo 里每个步骤：
-  1. 实现该步代码
-  2. 写/调整该步对应的测试（impl.md 已设计好）
-  3. 跑该步 verify（typecheck / 该步测试）
+  1.【TDD，测试先行】显式调用 test-driven-development，对该步走 RED→GREEN→REFACTOR：
+     - RED：先写该步测试（impl.md 已设计好）→ 跑一次，确认它因"功能缺失"而失败（不是 typo / 报错）
+     - GREEN：写让该测试通过的"最小代码"（YAGNI，不超前实现）→ 跑一次，确认通过
+     - REFACTOR：保持全绿的前提下清理，不加新行为
+  2. 跑该步 verify（typecheck / 该步测试）
      - 失败 → 在重试上限内修复 → 重跑
-     - 超过上限 → 回滚该步未提交改动（git restore / git reset），工作区恢复干净，
-                  todo 标记 blocked，停下报告
-  4. 通过 → git add + commit（约定式提交信息，如 `feat(invite): add invitation table`）
+     - 超过上限 → 回滚该步未提交改动（git restore / git reset），工作区恢复干净，todo 标记 blocked，停下报告
+     - 注意：仅 GREEN / verify 的"意外失败"才回滚；RED 阶段测试"预期失败"是 TDD 正常环节，不触发回滚
+  3. 通过 → git add + commit（约定式提交信息，如 `feat(invite): add invitation table`）
+  4.【mini 代码审核】显式调用 requesting-code-review，审本步 diff：
+     - `BASE_SHA=$(git rev-parse HEAD~1)`  `HEAD_SHA=$(git rev-parse HEAD)`（仅审这一步）
+     - 派 general-purpose reviewer 子代理；DESCRIPTION 填该步、PLAN_OR_REQUIREMENTS 引 impl.md 对应条目
+     - 用 receiving-code-review 纪律处理反馈：Critical / Important 现修；Minor 记入 review-log.md；
+       认为错的用技术理由反驳（不盲目照改、YAGNI 检查、逐条改逐条测）
+     - 产生修复 → 追加 fixup 提交或新提交 → 重跑该步 verify
   5. 勾掉 todo.md，进入下一步
 ```
 
-*WHY*：每个 commit = 一个可 Review / 可回滚 / 可定位 CI 失败的单元。**失败即回滚**保证停下时工作区干净、不累积脏状态。禁止"一次性改几十个文件再提交"——看似快，风险极高。
+*WHY*：每个 commit = 一个可 Review / 可回滚 / 可定位 CI 失败的单元。实现用 TDD——测试先失败过、代码最小化，避免"先实现后补测试"证明不了任何事；commit 后立刻审 diff，在问题扩散前用 reviewer 子代理拦住（review early, review often）。**失败即回滚**保证停下时工作区干净、不累积脏状态。禁止"一次性改几十个文件再提交"——看似快，风险极高。
+
+> **轻量化**：对纯文档 / 格式 / lint、无逻辑改动的步骤，可在 todo.md 标记 `skip-review`，跳过 mini 审核避免空跑 reviewer。
+>
+> **mini 审核 ≠ Step 6 门禁**：前者是每步的 agent 代码质量审查，后者是整条分支的机械门禁（全量测试 / lint / build / 回归 + bugfix 双分支验证），两者互补，Step 6 不变。
 
 > 全自动环节：设计已获批准，实现/测试/提交均自主完成，**不再逐步询问**。所有提交都在 Step 0 建的独立分支上。
 
@@ -189,6 +201,8 @@ AI 写出来的东西看似逻辑完整，却常藏隐患：需求理解偏差�
 - **绿基线前置**：实现前仓库须全绿，否则不开始。
 - **失败即回滚**：步骤重试耗尽即回滚该步改动，不累积脏状态。
 - **每步带测试 + 自动提交**：不允许"裸代码"步骤，不允许一次性大提交。
+- **实现用 TDD（test-first）**：Step 5 每步实现走 RED→GREEN——先写测试并看到它因功能缺失而失败，再写最小代码。代码先行即视为跳过 TDD。
+- **每步提交后 mini 代码审核**：Step 5 每步 commit 后调用 `requesting-code-review` 审本步 diff（HEAD~1..HEAD），用 `receiving-code-review` 处理反馈；Critical / Important 须在进入下一步前处置。
 - **验收门禁强制**：全量 guard 测试须全绿；bugfix 须双分支验证。
 - **复用优先**：先在 context.md 里找既有实现，再决定新增。
 - **测试命令以项目为准**：verify/guard 跑哪些命令，按项目实际（见 context.md「测试方式」）。
@@ -203,6 +217,6 @@ AI 写出来的东西看似逻辑完整，却常藏隐患：需求理解偏差�
 4. **Step 2**：Writer 起草 `prd.md` → 派多视角 Reviewer 子代理 → 循环修订 → 记 `review-log.md`。
 5. **Step 3**：Writer 起草 `impl.md`（含测试设计）→ 派多视角 Reviewer 子代理 → 循环修订 → 记 `review-log.md`。
 6. **Step 4**：呈现规格审阅 → 等用户批准（**唯一人工门禁**）。
-7. **Step 5–7 自动执行**（不再询问）：绿基线 → 生成 `todo.md` → 逐步实现 + verify + 自动提交（失败即回滚）→ 全量 guard 门禁（bugfix 加双分支验证）→ 总结 + 记忆确认。
+7. **Step 5–7 自动执行**（不再询问）：绿基线 → 生成 `todo.md` → 逐步 **TDD（RED→GREEN）+ verify + 自动提交 + 每步 mini 代码审核**（失败即回滚；审核反馈用 `receiving-code-review` 处置）→ 全量 guard 门禁（bugfix 加双分支验证）→ 总结 + 记忆确认。
 
 每一步用到的模板/提示词在 `references/` 下，按需读取，不要一次性全塞进上下文。
