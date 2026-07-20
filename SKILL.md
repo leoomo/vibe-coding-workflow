@@ -1,6 +1,6 @@
 ---
 name: vibe-coding-workflow
-description: 当用户要"实现某功能 / 修某个 bug / vibe coding 一个任务"时使用。强制规格驱动管线：上下文工程 → 对抗式 Reviewer 子代理 → PRD → 实现文档 → 测试设计 → 分步实现（TDD + 每步代码审核）+逐步提交 → 验收门禁。支持"自动化/自动决策"入参：由 AI 按产品上线标准自主做最优决策，不等待人工批准。核心铁律：在被审查的书面计划获批准或自动决策通过前，绝不写代码。
+description: 当用户要"实现某功能 / 修某个 bug / vibe coding 一个任务"时使用。强制规格驱动管线：上下文工程 → 对抗式 Reviewer 子代理 → PRD → 实现文档 → 测试设计 → 分步实现（TDD + 每步代码审核）+逐步提交 → 验收门禁 → 分支级 Standards/Spec 最终审核 → 复盘。支持"自动化/自动决策"入参：由 AI 按产品上线标准自主做最优决策，不等待人工批准。核心铁律：在被审查的书面计划获批准或自动决策通过前，绝不写代码。
 ---
 
 # Vibe Coding Workflow
@@ -34,8 +34,8 @@ description: 当用户要"实现某功能 / 修某个 bug / vibe coding 一个�
 ### 决策模式
 
 - **交互决策（默认）**：Step 4 输出规格审阅，等待用户 `确认` 后才写代码；遇到范围、风险、权衡时优先让用户决策。
-- **自动决策（输入含 `自动化` 或 `自动决策`）**：AI 以"可上线、可回滚、可验证、最小惊扰用户"为目标自行选择方案；PRD/impl 仍必须经 Reviewer 无阻断项审查，但 Step 4 由 AI 根据上线标准自签批准，随后直接执行 Step 5-7。
-- 自动决策不是降低标准：不得跳过上下文工程、Reviewer、TDD、绿基线、逐步提交、mini 审核、guard 门禁；不得使用模拟数据或假数据伪造通过。
+- **自动决策（输入含 `自动化` 或 `自动决策`）**：AI 以"可上线、可回滚、可验证、最小惊扰用户"为目标自行选择方案；PRD/impl 仍必须经 Reviewer 无阻断项审查，但 Step 4 由 AI 根据上线标准自签批准，随后直接执行 Step 5-8。
+- 自动决策不是降低标准：不得跳过上下文工程、Reviewer、TDD、绿基线、逐步提交、mini 审核、guard 门禁、final review 或收尾完整性检查；不得使用模拟数据或假数据伪造通过。
 - 自动决策遇到**真实不可替代的外部阻塞**（缺少生产密钥、第三方账号授权、必须由业务方确认的合规/法务决定、线上不可逆操作）才停下报告；普通技术选型、默认文案、边界行为、交互细节、测试策略由 AI 自行决定。
 
 ## 核心理念
@@ -44,7 +44,7 @@ AI 写出来的东西看似逻辑完整，却常藏隐患：需求理解偏差�
 
 1. **每份关键产出都经"多视角对抗式 Reviewer 子代理"审查**（Writer 推进，Reviewer 按视角挑刺 + 打覆盖表，循环至全视角无阻断项）。
 2. **测试与实现同步设计**，并在写代码前先有被批准的规格。
-3. **设计决策获批准后，全程自动**：从建分支、分步实现、逐步自动提交，到验收门禁，AI 自主完成——默认人只在"设计批准"这一处介入一次；若启用自动决策，则这一处也由 AI 按上线标准自签通过。
+3. **设计决策获批准后，全程自动**：从建分支、分步实现、逐步自动提交，到 guard、final review、复盘与收尾完整性检查，AI 自主完成——默认人只在"设计批准"这一处介入一次；若启用自动决策，则这一处也由 AI 按上线标准自签通过。
 
 > 单个 AI 会自洽；让第二个 AI 专门找问题，是这套流程的命门。
 > "批准后自动跑完"正是 vibe coding 的生产力所在：人的注意力放在设计/上下文/验收，执行交给流程。
@@ -60,7 +60,7 @@ AI 写出来的东西看似逻辑完整，却常藏隐患：需求理解偏差�
 ├── impl.md           # 怎么做（实现文档 + 测试设计）
 ├── review-log.md     # Reviewer 挑刺与处置记录
 ├── todo.md           # 细粒度任务（每条带 verify + 提交点）
-└── retrospective.md  # Step 7 四题复盘（提炼 + 规范反思）
+└── retrospective.md  # Step 7 三类复盘 + 归属标签
 ```
 
 ## 工作流程
@@ -71,10 +71,11 @@ AI 写出来的东西看似逻辑完整，却常藏隐患：需求理解偏差�
 2. 解析决策模式：输入中出现 `自动化` 或 `自动决策` → 启用**自动决策模式**，从任务描述中移除该标记；否则为默认交互决策。
 3. 判断任务类型：**feature**（新功能）还是 **bugfix**（修 bug）——bugfix 在 Step 6 有额外验证。
 4. 创建 `.vibe-coding/<功能名称>/`。
-5. **一开始就建独立分支**，所有后续工作（含规格文档与代码）都在此分支上：
+5. Git 项目在建分支前执行 `BASE_SHA=$(git rev-parse HEAD)`，初始化 `review-log.md` 并记录 `BASE_SHA`。该值是 Step 6.5 唯一的分支审核固定点，后续不重新推测。
+6. **一开始就建独立分支**，所有后续工作（含规格文档与代码）都在此分支上：
    - feature → `git checkout -b feat/<功能名称>`
    - bugfix → `git checkout -b fix/<功能名称>`
-   - 非 git 项目 → 跳过建分支，仅在总结时提示。
+   - 非 git 项目 → 记录 `BASE_SHA: unavailable (non-git)`，跳过建分支；`todo.md` 每步必须记录完整变更文件路径，Step 6.5 按该清单审核。
 
 *WHY*：独立分支让小步自动提交可回滚、不污染主干——这是后面"批准后全自动"的前提。
 
@@ -140,7 +141,7 @@ AI 写出来的东西看似逻辑完整，却常藏隐患：需求理解偏差�
 
 默认交互决策：
 
-> 这是整个流程**唯一**需要人介入的点。一旦确认，Step 5–7 全自动执行。
+> 这是整个流程**唯一**需要人介入的点。一旦确认，Step 5–8 全自动执行。
 
 自动决策模式：
 
@@ -171,7 +172,7 @@ AI 写出来的东西看似逻辑完整，却常藏隐患：需求理解偏差�
      - 注意：仅 GREEN / verify 的"意外失败"才回滚；RED 阶段测试"预期失败"是 TDD 正常环节，不触发回滚
   3. 通过 → git add + commit（约定式提交信息，如 `feat(invite): add invitation table`）
   4.【mini 代码审核】显式调用 requesting-code-review，审本步 diff：
-     - `BASE_SHA=$(git rev-parse HEAD~1)`  `HEAD_SHA=$(git rev-parse HEAD)`（仅审这一步）
+     - `STEP_BASE_SHA=$(git rev-parse HEAD~1)`  `STEP_HEAD_SHA=$(git rev-parse HEAD)`（仅审这一步，不覆盖 Step 0 的 `BASE_SHA`）
      - 派 general-purpose reviewer 子代理；DESCRIPTION 填该步、PLAN_OR_REQUIREMENTS 引 impl.md 对应条目
      - 用 receiving-code-review 纪律处理反馈：Critical / Important 现修；Minor 记入 review-log.md；
        认为错的用技术理由反驳（不盲目照改、YAGNI 检查、逐条改逐条测）
@@ -183,7 +184,7 @@ AI 写出来的东西看似逻辑完整，却常藏隐患：需求理解偏差�
 
 > **轻量化**：对纯文档 / 格式 / lint、无逻辑改动的步骤，可在 todo.md 标记 `skip-review`，跳过 mini 审核避免空跑 reviewer。
 >
-> **mini 审核 ≠ Step 6 门禁**：前者是每步的 agent 代码质量审查，后者是整条分支的机械门禁（全量测试 / lint / build / 回归 + bugfix 双分支验证），两者互补，Step 6 不变。
+> **审核分工**：Step 5 mini review 管单步提交质量；Step 6 guard 做机械验证；Step 6.5 final review 管整条分支的跨提交设计与规格一致性。纯文档步骤可跳过 mini review，不得跳过 final review。
 
 > 全自动环节：设计已获批准，实现/测试/提交均自主完成，**不再逐步询问**。所有提交都在 Step 0 建的独立分支上。
 
@@ -195,11 +196,43 @@ AI 写出来的东西看似逻辑完整，却常藏隐患：需求理解偏差�
 2. **bugfix 双分支验证**（仅 bugfix 任务）：在修复前分支上确认相关测试**确实失败**，在修复后分支上确认**确实通过**——证明测试真覆盖了该 bug，而非"碰巧通过"。
 3. **回归检查**：相关既有功能测试仍通过。
 
-未过门禁 → 回 Step 5 修复，不得跳到总结。
+未过门禁 → 回 Step 5 修复，不得进入 Step 6.5。
 
 *WHY*：逐任务 verify 绿 ≠ 整体 guard 绿；绿基线 + 双分支验证排除"假阳性通过/修复"。
 
-### Step 7: 总结与复盘
+### Step 6.5: 最终分支审核（Final Branch Review）
+
+guard 全绿后，读取 `references/final-review.md`，用两个并行、上下文隔离的 `general-purpose` Reviewer 审核整条分支：
+
+- **Standards Review**：项目书面规范 + 可维护性 + 跨提交 code smells；跳过 lint/typecheck 已机械执行的问题。
+- **Spec Review**：只以本任务 `prd.md` + `impl.md` + 验收标准为规格源，查遗漏、错误实现和无依据扩展。
+
+Git 项目固定使用 `git diff "$BASE_SHA"...HEAD` 和 `git log "$BASE_SHA"..HEAD --oneline`；不搜索 Issue、不重新发现规格、不再询问 fixed point。两轴结果分别写入 `review-log.md` 的 `## Final Review` 下，不合并重排。
+
+- `Critical / Important` 必须修复；Git 项目提交修复，非 Git 项目记录修复文件与验证证据。然后重跑受影响测试、全量 guard 和两轴 final review。
+- `Minor` 可修复，或记录不处置理由，不阻断完成。
+- 规格冲突默认修实现；只有证据表明规格过时，才同步修订 `prd.md` / `impl.md` 并记录原因。
+- 两轴均无阻断项后：Git 项目记录 `FINAL_REVIEW_HEAD=$(git rev-parse HEAD)`；非 Git 项目记录已审变更文件的路径 + SHA-256 `FINAL_REVIEW_MANIFEST`。写入 `review-log.md` 后再进入 Step 7。
+
+### Step 7: 复盘与文档收尾
+
+读取 `references/retrospective-template.md`，结合实现、测试、guard 和 final review 的完整证据，写入 `<项目>/.vibe-coding/<功能名称>/retrospective.md`。`review-log.md` 是审计记录，`retrospective.md` 是提炼产物。
+
+复盘包含三类结论 + 归属标签：
+
+1. 影响决策的关键点（最多 3 个，带证据强度）。
+2. 值得封装的工作模式（最多 3 个候选）。
+3. 项目规范变更候选（最多 3 个，指向具体章节 + 可 paste 条款）。
+
+每条标注 `[本项目]` / `[推断]` / `[需验证]`。规范候选只记录在 `retrospective.md`；无论交互还是自动决策模式，都**不修改 `AGENTS.md`、不在此等待用户选择**。用户后续明确批准时，再把候选作为独立规范变更审核和提交。
+
+更新 `todo.md` 和 `review-log.md` 的最终状态。Git 项目将这三个收尾文档做一个单独的 docs commit；非 Git 项目跳过 commit，并在总结明确提示。然后执行完整性检查：
+
+- Git：工作区必须干净，且 `git diff --name-only "$FINAL_REVIEW_HEAD"..HEAD` 只能包含当前 `.vibe-coding/<功能名称>/` 内的流程文档。
+- 非 Git：重算 `FINAL_REVIEW_MANIFEST`，已审的非流程文档路径与 SHA-256 必须完全一致，且 final review 后不得触碰新的非流程文档。
+- final review 后一旦任何当前 `.vibe-coding/<功能名称>/` 之外的路径发生变更，立即回 Step 6，重跑 guard 和两轴 final review。
+
+### Step 8: 最终总结
 
 ```
 ═══════════════════════════════════════
@@ -209,33 +242,21 @@ AI 写出来的东西看似逻辑完整，却常藏隐患：需求理解偏差�
 ## ✅ 完成情况
 - 任务: X/Y ｜ 类型: feature/bugfix ｜ 分支: feat|fix/<名称> ｜ 提交数: N
 
-## 🔭 复盘（按 references/retrospective-template.md 四题结构）
+## 🔭 复盘（三类结论 + 归属标签）
 1. 影响决策的关键点（最多 3 个，带证据强度）
 2. 值得封装的工作模式（最多 3 个候选项）
 3. 项目规范的反思（最多 3 个候选，指向具体 § + 可 paste 条款）
-4. 结论归属标注（本项目 / 推断 / 需验证）
+每条已标注：本项目 / 推断 / 需验证
 ═══════════════════════════════════════
 ```
-
-复盘产物写入 `<项目>/.vibe-coding/<功能名称>/retrospective.md`（与 review-log.md 同目录、不同用途——前者审计、后者提炼）。
-
-**规范反思落地（题 3）**：
-- 题 3 候选写入 AGENTS.md 对应 §章节（如 §协作同步加铁律），强约束 binding rule 格式
-- **写入 AGENTS.md 的条款本身要最精简**：一句话铁律 + 一句话事件锚定，通常 ≤ 50 字；参照 §协作同步 L72 风格。范本：`**\`--delete-branch\` 用前必核 head**：确认 head 不是 \`dev\`/\`main\`/\`test\`，且是临时 feature 分支。曾因 PR #39 误删 dev。`
-- **AGENTS.md 改动跟着当前开发任务的 feature 分支 + PR 走**——不另开 docs/ PR；纯文档变更（无代码）才用 `docs/<brief>` 分支
-- CLAUDE.md 是 AGENTS.md 的 symlink，自动同步
-
-**决策模式行为**：
-- 交互模式：复盘呈现后，对题 3 每条候选询问用户（写入 AGENTS.md / 仅记录 / 拒绝）
-- 自动决策模式：题 3 强证据 + 低风险时主动在当前 feature 分支改 AGENTS.md（随任务 PR 合进）；弱证据则标「仅记录，等用户决策」
 
 > 不含合并 / PR 阶段。合并交由用户或其它流程决定。
 
 ## 规则（刚性，不可跳过）
 
 - **先规格后代码**：批准或自动决策通过的 `impl.md` 之前不写任何业务代码。
-- **自动决策入参**：用户输入含 `自动化` 或 `自动决策` 时，AI 按产品上线最优标准自行决策，不再依赖人工批准；但不得降低任何验证、审查、TDD、guard 标准。
-- **批准后全自动**：Step 4 获批后，Step 5–7 自主执行，不再逐步询问人。
+- **自动决策入参**：用户输入含 `自动化` 或 `自动决策` 时，AI 按产品上线最优标准自行决策，不再依赖人工批准；但不得降低任何验证、审查、TDD、guard、final review 或收尾完整性标准。
+- **批准后全自动**：Step 4 获批后，Step 5–8 自主执行，不再逐步询问人。
 - **独立分支**：Step 0 一开始就建分支；所有提交在该分支上，保证可回滚、不污染主干。
 - **Reviewer 多视角覆盖**：PRD/impl 审查必须按视角过、打覆盖表，适用视角全无阻断项才放行；**证据强制**（无证据不报）。
 - **机械验证**：verify / guard 一律靠跑命令判定，不靠"看起来没问题"；自动决策模式也不得用模拟数据、虚假数据或跳过测试来制造通过。
@@ -245,20 +266,22 @@ AI 写出来的东西看似逻辑完整，却常藏隐患：需求理解偏差�
 - **实现用 TDD（test-first）**：Step 5 每步实现走 RED→GREEN——先写测试并看到它因功能缺失而失败，再写最小代码。代码先行即视为跳过 TDD。
 - **每步提交后 mini 代码审核**：Step 5 每步 commit 后调用 `requesting-code-review` 审本步 diff（HEAD~1..HEAD），用 `receiving-code-review` 处理反馈；Critical / Important 须在进入下一步前处置。
 - **验收门禁强制**：全量 guard 测试须全绿；bugfix 须双分支验证。
+- **最终分支审核强制**：guard 后并行执行 Standards / Spec 两轴审核；Critical / Important 必须触发「修复 → 测试 → guard → 重审」。
 - **复用优先**：先在 context.md 里找既有实现，再决定新增。
 - **测试命令以项目为准**：verify/guard 跑哪些命令，按项目实际（见 context.md「测试方式」）。
-- **复盘导向**：四题优先找「会改变下一步取舍、投入顺序、风险判断」的点，不写流水账。凑不够就说「本次无」；弱证据标「还缺什么」。题 3 必须给「现状原文 + 可 paste 条款」，且**写入 AGENTS.md 的条款本身要最精简**（一句话铁律 + 一句话事件锚定，参照 §协作同步 L72 风格，通常 ≤ 50 字）。AGENTS.md 改动跟当前任务 feature PR 走，不另开 docs/ PR。
+- **复盘导向**：三类结论优先找「会改变下一步取舍、投入顺序、风险判断」的点，不写流水账。凑不够就说「本次无」；弱证据标「还缺什么」。规范候选必须给「现状原文 + 可 paste 条款」，并保持「一句铁律 + 一句事件锚定，通常 ≤ 50 字」；不得在本任务中修改 `AGENTS.md`，也不得另建「项目记忆」类弱约束沉淀轨道。
+- **收尾完整性**：复盘文档单独提交后工作区必须干净；final review 后若有非本任务流程文档变更，必须重跑 guard + final review。
 
 ## 执行指令
 
 当用户调用此技能时：
 
 1. **解析输入** → 决策模式（默认交互；含 `自动化` / `自动决策` 则自动）+ 功能名 + 任务描述 + 类型（feature/bugfix）。
-2. **建目录 + 建分支**：`.vibe-coding/<功能名称>/` + `git checkout -b feat|fix/<功能名称>`。
+2. **锁定固定点 + 建目录 + 建分支**：分支前记录 `BASE_SHA` 到 `review-log.md`，再执行 `git checkout -b feat|fix/<功能名称>`。
 3. **Step 1**：派 Explore agent → 写 `context.md`。
 4. **Step 2**：Writer 起草 `prd.md` → 派多视角 Reviewer 子代理 → 循环修订 → 记 `review-log.md`。
 5. **Step 3**：Writer 起草 `impl.md`（含测试设计）→ 派多视角 Reviewer 子代理 → 循环修订 → 记 `review-log.md`。
 6. **Step 4**：呈现规格审阅 → 默认等用户批准（**唯一人工门禁**）；自动决策模式下输出自动决策结论、自签批准并继续。
-7. **Step 5–7 自动执行**（不再询问）：绿基线 → 生成 `todo.md` → 逐步 **TDD（RED→GREEN）+ verify + 自动提交 + 每步 mini 代码审核**（失败即回滚；审核反馈用 `receiving-code-review` 处置）→ 全量 guard 门禁（bugfix 加双分支验证）→ 总结 + 复盘（四题结构，题 3 落 AGENTS.md，跟当前任务 PR 走）。
+7. **Step 5–8 自动执行**（不再询问）：绿基线 → 生成 `todo.md` → 逐步 **TDD（RED→GREEN）+ verify + 自动提交 + 每步 mini 代码审核**（失败即回滚；审核反馈用 `receiving-code-review` 处置）→ 全量 guard 门禁（bugfix 加双分支验证）→ Standards / Spec final review → 阻断项修复闭环 → 复盘文档收尾 → 最终总结。
 
 每一步用到的模板/提示词在 `references/` 下，按需读取，不要一次性全塞进上下文。

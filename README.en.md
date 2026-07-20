@@ -4,13 +4,13 @@
 
 > Real vibe coding isn't "give the AI one sentence and wait for it to finish." It's a process that makes AI output **controllable, reviewable, and verifiable.**
 
-This is a [Claude Code Skill](https://docs.claude.com/en/docs/claude-code/skills) that bakes "spec-driven development" into a forced pipeline: **Context Engineering → adversarial Reviewer subagent → PRD → implementation doc → test design → stepwise implementation + incremental commits → acceptance gate**.
+This is a [Claude Code Skill](https://docs.claude.com/en/docs/claude-code/skills) that bakes "spec-driven development" into a forced pipeline: **Context Engineering → PRD / implementation doc → TDD implementation + mini reviews → acceptance gate → Standards / Spec final review → retrospective**.
 
 ## The Iron Law
 
 **Before an reviewed, written plan is approved, no code is written.**
 
-You don't need to read every line of code — but you must put your attention on **process design, context quality, acceptance criteria, and risk control**. Once the design is approved, everything runs autonomously: branching, stepwise implementation, incremental auto-commits, and the acceptance gate are all done by the AI. You step in exactly once — at the "design approval" point.
+You don't need to read every line of code — but you must put your attention on **process design, context quality, acceptance criteria, and risk control**. Once the design is approved, everything runs autonomously: branching, stepwise implementation, incremental auto-commits, guard, final review, and retrospective closeout are all done by the AI. You step in exactly once — at the "design approval" point.
 
 ## Why It Exists
 
@@ -59,21 +59,25 @@ Examples:
 
 ## Workflow
 
-Each task advances through these seven steps:
+Each task advances through these workflow nodes:
 
 | Step | Phase | Manual? |
 |------|-------|---------|
-| Step 0 | Bootstrap, naming, and **create an isolated branch** | Auto |
+| Step 0 | For Git, capture `BASE_SHA`, bootstrap, and **create an isolated branch** | Auto |
 | Step 1 | **Context Engineering** (Explore agent reads the project deeply) | Auto |
 | Step 2 | **PRD** (Writer + adversarial Reviewer loop) | Auto |
 | Step 3 | **Implementation doc + test design** (Writer + Reviewer loop) | Auto |
 | Step 4 | **Plan approval gate** | ⚠️ The only manual gate |
 | Step 5 | Stepwise implementation + **incremental auto-commits** | Auto |
 | Step 6 | **Acceptance gate** (full test suite / bugfix dual-branch verification) | Auto |
-| Step 7 | Summary and memory confirmation | Auto |
+| Step 6.5 | **Standards / Spec final branch review** | Auto |
+| Step 7 | Retrospective and documentation closeout | Auto |
+| Step 8 | Final summary | Auto |
 
-- **Step 4 is the only point that requires human input.** Once confirmed, Steps 5–7 run automatically with no step-by-step asking.
+- **Step 4 is the only point that requires human input.** Once confirmed, Steps 5–8 run automatically with no step-by-step asking.
 - A bugfix task adds a **dual-branch verification** at Step 6: confirm the relevant tests genuinely fail before the fix and genuinely pass after it — proving the tests actually cover that bug rather than "passing by accident."
+- Step 6.5 reviews either Git's `BASE_SHA...HEAD` or a non-Git changed-file manifest along Standards and Spec axes in parallel; every Critical or Important finding must be fixed, guarded, and reviewed again.
+- Non-Git projects skip branch creation and the closing commit, verify post-review changes with reviewed paths plus a SHA-256 manifest, and state the limitation in the summary.
 
 ## Artifacts Produced
 
@@ -85,7 +89,8 @@ Each task produces a set of spec docs **inside the target project**, for review 
 ├── prd.md          # What to do (Writer + Reviewer polish)
 ├── impl.md         # How to do it (implementation doc + test design)
 ├── review-log.md   # Reviewer findings and how each was handled
-└── todo.md         # Fine-grained tasks (each with tests + a commit point)
+├── todo.md         # Fine-grained tasks (each with tests + a commit point)
+└── retrospective.md # Extracted lessons and proposed standards changes
 ```
 
 > These docs are generated in the project you're working on, not in this skill's directory.
@@ -93,11 +98,15 @@ Each task produces a set of spec docs **inside the target project**, for review 
 ## Rules (rigid, non-skippable)
 
 - **Spec before code**: no business code is written before `impl.md` is approved.
-- **Auto after approval**: once Step 4 is approved, Steps 5–7 execute autonomously, without step-by-step asking.
+- **Auto after approval**: once Step 4 is approved, Steps 5–8 execute autonomously, without step-by-step asking.
 - **Isolated branch**: Step 0 creates the branch up front; all commits land on it, keeping them rollback-safe and off the main branch.
 - **Reviewer is mandatory**: the PRD and impl phases must pass through the adversarial Reviewer subagent and converge.
 - **Every step ships tests + auto-commits**: no "naked code" steps, no single mega-commit.
+- **Rollback on exhausted retries**: revert the step's uncommitted changes and stop with a clean worktree.
+- **Mini-review feedback is handled**: use `receiving-code-review`; resolve Critical and Important findings before the next step.
 - **Acceptance gate is enforced**: the full test suite must be green; bugfixes need dual-branch verification.
+- **Final review is enforced**: repo standards and PRD / impl fidelity are reviewed separately, and blocking findings must be closed.
+- **Retrospectives do not mutate standards**: `AGENTS.md` proposals stay in `retrospective.md` until the user explicitly approves a later standards change.
 - **Reuse first**: check `context.md` for existing implementations before adding anything new.
 - **Test commands follow the project**: which commands the acceptance gate runs depends on the actual project (see the "Testing" section of `context.md`).
 
@@ -113,7 +122,10 @@ vibe-coding-workflow/
     ├── prd-template.md                       # Step 2 PRD template
     ├── implementation-doc-template.md        # Step 3 implementation doc + test design template
     ├── reviewer-prompt.md                    # Step 2/3 adversarial Reviewer prompt
-    └── acceptance-checklist.md               # Step 6 acceptance gate checklist
+    ├── reviewer-lenses.md                    # Step 2/3 Reviewer lenses
+    ├── acceptance-checklist.md               # Step 6 acceptance gate checklist
+    ├── final-review.md                       # Step 6.5 two-axis final review
+    └── retrospective-template.md             # Step 7 retrospective template
 ```
 
 The templates/prompts under `references/` are **read on demand** at their respective steps — they aren't dumped into context all at once.
@@ -128,7 +140,7 @@ Not a great fit: a one-line typo fix, or a purely exploratory question that need
 
 ## Not Included
 
-This skill **does not cover the merge / PR stage** — the workflow ends once the acceptance gate passes. Merging is left to you or another process.
+This skill **does not cover the merge / PR stage** — the workflow ends after guard, final review, and retrospective closeout pass. Merging is left to you or another process.
 
 ## License
 

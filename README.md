@@ -4,13 +4,13 @@
 
 > 真正的 vibe coding 不是"给 AI 一句话等它写完"，而是靠一套流程，让 AI 产出**可控、可审查、可验证**。
 
-这是一个 [Claude Code Skill](https://docs.claude.com/en/docs/claude-code/skills)，把"规格驱动开发"固化成一条强制管线：**上下文工程 → 对抗式 Reviewer 子代理 → PRD → 实现文档 → 测试设计 → 分步实现 + 逐步提交 → 验收门禁**。
+这是一个 [Claude Code Skill](https://docs.claude.com/en/docs/claude-code/skills)，把"规格驱动开发"固化成一条强制管线：**上下文工程 → PRD / 实现文档 → TDD 分步实现 + mini review → 验收门禁 → Standards / Spec 最终审核 → 复盘**。
 
 ## 核心铁律
 
 **在被审查的书面计划获批准前，绝不写代码。**
 
-人不必逐行看代码，但必须把注意力放在**流程设计、上下文质量、验收标准、风险控制**上。设计一旦获批准，从建分支、分步实现、逐步自动提交，到验收门禁，全部由 AI 自主跑完——人只在"设计批准"这一处介入一次。
+人不必逐行看代码，但必须把注意力放在**流程设计、上下文质量、验收标准、风险控制**上。设计一旦获批准，从建分支、分步实现、逐步自动提交，到 guard、最终审核与复盘收尾，全部由 AI 自主跑完——人只在"设计批准"这一处介入一次。
 
 ## 为什么需要它
 
@@ -59,21 +59,25 @@ git clone https://github.com/leoomo/vibe-coding-workflow.git \
 
 ## 工作流程
 
-每个任务会按以下七步推进：
+每个任务会按以下节点推进：
 
 | 步骤 | 阶段 | 是否人工 |
 |------|------|----------|
-| Step 0 | 启动、命名与**建独立分支** | 自动 |
+| Step 0 | Git 项目记录 `BASE_SHA`、命名与**建独立分支** | 自动 |
 | Step 1 | **上下文工程**（Explore agent 深读项目） | 自动 |
 | Step 2 | **PRD**（Writer + 对抗式 Reviewer 循环） | 自动 |
 | Step 3 | **实现文档 + 测试设计**（Writer + Reviewer 循环） | 自动 |
 | Step 4 | **计划批准门禁** | ⚠️ 唯一人工门禁 |
 | Step 5 | 分步实现 + **逐步自动提交** | 自动 |
 | Step 6 | **验收门禁**（全量测试 / bugfix 双分支验证） | 自动 |
-| Step 7 | 总结与记忆确认 | 自动 |
+| Step 6.5 | **Standards / Spec 最终分支审核** | 自动 |
+| Step 7 | 复盘与文档收尾 | 自动 |
+| Step 8 | 最终总结 | 自动 |
 
-- **Step 4 是唯一需要人介入的点**。确认后，Step 5–7 全自动执行，不再逐步询问。
+- **Step 4 是唯一需要人介入的点**。确认后，Step 5–8 全自动执行，不再逐步询问。
 - bugfix 任务在 Step 6 多一道**双分支验证**：确认修复前测试确实失败、修复后确实通过，证明测试真覆盖了该 bug，而非"碰巧通过"。
+- Step 6.5 对 Git 项目的 `BASE_SHA...HEAD` 或非 Git 项目的变更文件清单并行做两轴审核；`Critical / Important` 必须修复、重跑 guard 并重审。
+- 非 Git 项目跳过建分支和收尾 commit，用已审文件路径 + SHA-256 manifest 检查 final review 后的变更，并在总结提示。
 
 ## 产出物
 
@@ -85,7 +89,8 @@ git clone https://github.com/leoomo/vibe-coding-workflow.git \
 ├── prd.md          # 做什么（Writer + Reviewer 打磨）
 ├── impl.md         # 怎么做（实现文档 + 测试设计）
 ├── review-log.md   # Reviewer 挑刺与处置记录
-└── todo.md         # 细粒度任务（每条带测试 + 提交点）
+├── todo.md         # 细粒度任务（每条带测试 + 提交点）
+└── retrospective.md # 复盘提炼与规范变更候选
 ```
 
 > 这些文档生成在你要开发的项目里，而不是本 skill 目录里。
@@ -93,11 +98,15 @@ git clone https://github.com/leoomo/vibe-coding-workflow.git \
 ## 规则（刚性，不可跳过）
 
 - **先规格后代码**：批准的 `impl.md` 之前不写任何业务代码。
-- **批准后全自动**：Step 4 获批后，Step 5–7 自主执行，不再逐步询问。
+- **批准后全自动**：Step 4 获批后，Step 5–8 自主执行，不再逐步询问。
 - **独立分支**：Step 0 一开始就建分支；所有提交在该分支上，保证可回滚、不污染主干。
 - **Reviewer 不可跳过**：PRD、impl 阶段必须经对抗式 Reviewer 子代理审查并收敛。
 - **每步带测试 + 自动提交**：不允许"裸代码"步骤，不允许一次性大提交。
+- **失败即回滚**：步骤重试耗尽即回滚未提交改动，干净停止。
+- **mini review 反馈必须处置**：用 `receiving-code-review` 处理；Critical / Important 在下一步前解决。
 - **验收门禁强制**：全量测试须全绿；bugfix 须双分支验证。
+- **最终审核强制**：分别检查项目规范与 PRD / impl 一致性，阻断项必须闭环。
+- **复盘不改规范**：只在 `retrospective.md` 记录 `AGENTS.md` 候选，等用户后续明确批准。
 - **复用优先**：先在 `context.md` 里找既有实现，再决定新增。
 - **测试命令以项目为准**：验收门禁跑哪些命令，按项目实际（见 `context.md`「测试方式」）。
 
@@ -107,12 +116,16 @@ git clone https://github.com/leoomo/vibe-coding-workflow.git \
 vibe-coding-workflow/
 ├── SKILL.md                                  # 技能主入口（流程定义）
 ├── README.md                                 # 本文件
+├── README.en.md                              # English documentation
 └── references/
     ├── context-checklist.md                  # Step 1 上下文收集清单
     ├── prd-template.md                       # Step 2 PRD 模板
     ├── implementation-doc-template.md        # Step 3 实现文档 + 测试设计模板
     ├── reviewer-prompt.md                    # Step 2/3 对抗式 Reviewer 提示词
-    └── acceptance-checklist.md               # Step 6 验收门禁清单
+    ├── reviewer-lenses.md                    # Step 2/3 Reviewer 视角
+    ├── acceptance-checklist.md               # Step 6 验收门禁清单
+    ├── final-review.md                       # Step 6.5 双轴最终审核
+    └── retrospective-template.md             # Step 7 复盘模板
 ```
 
 `references/` 下的模板/提示词在对应步骤**按需读取**，不会一次性全塞进上下文。
@@ -127,7 +140,7 @@ vibe-coding-workflow/
 
 ## 不包含
 
-本 skill **不含合并 / PR 阶段**——验收门禁通过即结束，合并交由用户或其它流程决定。
+本 skill **不含合并 / PR 阶段**——guard、最终审核和复盘收尾通过即结束，合并交由用户或其它流程决定。
 
 ## License
 
